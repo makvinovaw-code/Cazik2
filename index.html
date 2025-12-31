@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Golden Star Casino</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --gold: #ffcf4b;
+            --dark-bg: #0d0d0d;
+            --accent: #ff0055;
+        }
+
+        body {
+            background: var(--dark-bg);
+            background-image: radial-gradient(circle at top, #1a1a2e 0%, #0d0d0d 100%);
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            justify-content: space-evenly;
+            overflow: hidden;
+        }
+
+        /* Баланс сверху */
+        .header {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 30px;
+            border-radius: 0 0 30px 30px;
+            border: 1px solid rgba(255, 207, 75, 0.3);
+            backdrop-filter: blur(10px);
+            width: 80%;
+        }
+
+        #stars-balance {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--gold);
+            text-shadow: 0 0 15px rgba(255, 207, 75, 0.6);
+        }
+
+        /* Игровое поле */
+        .slot-machine {
+            display: flex;
+            gap: 15px;
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 25px;
+            border: 2px solid var(--gold);
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(255, 207, 75, 0.2);
+        }
+
+        .slot {
+            width: 70px;
+            height: 90px;
+            background: linear-gradient(145deg, #1a1a1a, #262626);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 45px;
+            box-shadow: inset 0 0 10px #000;
+            transition: transform 0.1s;
+        }
+
+        .slot.spinning {
+            animation: shake 0.1s infinite;
+        }
+
+        @keyframes shake {
+            0% { transform: translateY(-2px); }
+            100% { transform: translateY(2px); }
+        }
+
+        /* Управление ставками */
+        .bet-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .bet-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--gold);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .current-bet {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        /* Кнопка Spin */
+        .spin-btn {
+            width: 200px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--gold) 0%, #ff9900 100%);
+            border: none;
+            border-radius: 30px;
+            color: #000;
+            font-size: 22px;
+            font-weight: 900;
+            text-transform: uppercase;
+            box-shadow: 0 0 30px rgba(255, 153, 0, 0.4);
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .spin-btn:disabled {
+            filter: grayscale(1);
+            opacity: 0.5;
+        }
+
+        .win-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            font-weight: bold;
+            color: var(--gold);
+            text-shadow: 0 0 20px orange;
+            pointer-events: none;
+            opacity: 0;
+            transition: 0.5s;
+        }
+
+        .show-win { opacity: 1; transform: translate(-50%, -60%) scale(1.2); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>ТВОЙ БАЛАНС</div>
+        <div id="stars-balance">⭐ 1000</div>
+    </div>
+
+    <div class="win-overlay" id="win-txt">BIG WIN!</div>
+
+    <div class="slot-machine">
+        <div id="slot1" class="slot">💎</div>
+        <div id="slot2" class="slot">💎</div>
+        <div id="slot3" class="slot">💎</div>
+    </div>
+
+    <div class="bet-controls">
+        <button class="bet-btn" onclick="changeBet(-10)">-</button>
+        <div class="current-bet">СТАВКА: <span id="bet-val">10</span></div>
+        <button class="bet-btn" onclick="changeBet(10)">+</button>
+    </div>
+
+    <button class="spin-btn" id="spin-button" onclick="startSpin()">JACKPOT</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        let balance = 1000;
+        let bet = 10;
+        const symbols = ['🍒', '🍋', '7️⃣', '💎', '⭐', '🍀'];
+        const slots = [
+            document.getElementById('slot1'),
+            document.getElementById('slot2'),
+            document.getElementById('slot3')
+        ];
+
+        function changeBet(val) {
+            if (bet + val >= 10 && bet + val <= 500) {
+                bet += val;
+                document.getElementById('bet-val').innerText = bet;
+                tg.HapticFeedback.selectionChanged();
+            }
+        }
+
+        function startSpin() {
+            if (balance < bet) {
+                tg.showAlert("Недостаточно Звезд!");
+                return;
+            }
+
+            // Снимаем ставку
+            balance -= bet;
+            updateUI();
+            
+            const btn = document.getElementById('spin-button');
+            btn.disabled = true;
+            tg.HapticFeedback.impactOccurred('medium');
+
+            // Запуск анимации
+            slots.forEach(s => s.classList.add('spinning'));
+
+            let spinTime = 1500;
+            
+            setTimeout(() => {
+                slots.forEach(s => s.classList.remove('spinning'));
+                
+                // Генерируем результат
+                const res = [
+                    symbols[Math.floor(Math.random() * symbols.length)],
+                    symbols[Math.floor(Math.random() * symbols.length)],
+                    symbols[Math.floor(Math.random() * symbols.length)]
+                ];
+
+                slots.forEach((s, i) => s.innerText = res[i]);
+
+                // Проверка выигрыша
+                if (res[0] === res[1] && res[1] === res[2]) {
+                    let winAmount = bet * 10;
+                    if (res[0] === '7️⃣') winAmount = bet * 50;
+                    
+                    balance += winAmount;
+                    showWinEffect(winAmount);
+                }
+
+                btn.disabled = false;
+                updateUI();
+            }, spinTime);
+        }
+
+        function showWinEffect(amount) {
+            const winTxt = document.getElementById('win-txt');
+            winTxt.innerText = `+${amount} ⭐`;
+            winTxt.classList.add('show-win');
+            tg.HapticFeedback.notificationOccurred('success');
+            
+            setTimeout(() => {
+                winTxt.classList.remove('show-win');
+            }, 2000);
+        }
+
+        function updateUI() {
+            document.getElementById('stars-balance').innerText = `⭐ ${balance}`;
+        }
+    </script>
+</body>
+</html>
